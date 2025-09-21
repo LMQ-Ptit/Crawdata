@@ -40,6 +40,7 @@ def setup_driver(headless=False):
     chrome_options.add_argument('--disable-animations')
     chrome_options.add_argument('--disable-software-rasterizer')
     chrome_options.add_argument('--ignore-gpu-blocklist')
+    
     # Tải nhanh hơn bằng cách không tải hình ảnh
     prefs = {
         "profile.default_content_setting_values.notifications": 2,
@@ -82,10 +83,10 @@ def check_and_handle_captcha(driver):
         if elements:
             print("\n--- CAPTCHA DETECTED! ---")
             print("Vui lòng giải captcha trong cửa sổ trình duyệt.")
-            print("Sau khi giải xong, chương trình sẽ tự động tiếp tục sau 3 giây.")
+            print("Sau khi giải xong, chương trình sẽ tự động tiếp tục sau 30 giây.")
             
             # Chờ người dùng giải captcha
-            time.sleep(30)  # Sửa thành 30 giây
+            time.sleep(30)
             
             # Kiểm tra xem đã giải captcha thành công chưa
             if any(driver.find_elements(By.XPATH, indicator) for indicator in captcha_indicators):
@@ -241,13 +242,14 @@ def save_to_csv(reviews, filename):
         # Viết dữ liệu
         writer.writerows(reviews)
 
-def crawl_lazada_reviews(url, max_pages=10, headless=False, product_index=None, total_products=None):
+def crawl_lazada_reviews(url, max_pages=10, start_page=1, headless=False, product_index=None, total_products=None):
     """
     Hàm cào bình luận từ nhiều trang của sản phẩm Lazada
     
     Args:
         url (str): URL sản phẩm cần cào dữ liệu
         max_pages (int): Số trang tối đa cần cào
+        start_page (int): Trang bắt đầu cào (mặc định là 1)
         headless (bool): Có chạy ở chế độ headless hay không
         product_index (int): Chỉ số của sản phẩm hiện tại
         total_products (int): Tổng số sản phẩm cần cào
@@ -290,9 +292,82 @@ def crawl_lazada_reviews(url, max_pages=10, headless=False, product_index=None, 
         
         # Giới hạn số trang cần cào theo người dùng chỉ định
         pages_to_crawl = total_pages
-        print(f"  * Sẽ cào tối đa {pages_to_crawl} trang")
         
-        # Cào nhiều trang bình luận
+        # Nếu start_page > 1, cần chuyển đến trang bắt đầu cào
+        if start_page > 1:
+            print(f"  * Sẽ bắt đầu cào từ trang {start_page} đến trang {pages_to_crawl}")
+            
+            # Bắt đầu từ trang 1 và di chuyển đến trang start_page
+            print(f"  * Đang chuyển đến trang {start_page}...")
+            
+            # Lặp để click nút Next Page cho đến khi đến trang start_page
+            while current_page < start_page and has_next_page:
+                print(f"    + Đang chuyển trang: {current_page} -> {current_page+1}")
+                
+                # Cuộn xuống để tìm nút Next Page
+                for i in range(3):
+                    driver.execute_script(f"window.scrollBy(0, {random.randint(500, 700)})")
+                    time.sleep(0.2)  # Thời gian chờ ngắn để tăng tốc
+                
+                # Tìm nút Next Page và click
+                try:
+                    # Thử nhiều selector để tìm nút Next Page
+                    next_button = None
+                    selectors = [
+                        "button.iweb-pagination-item-link[title='Next Page']",
+                        "li.iweb-pagination-next:not(.iweb-pagination-disabled) button",
+                        "//li[contains(@class, 'pagination-next') and not(contains(@class, 'disabled'))]//button",
+                        "//button[contains(@title, 'Next') or contains(@aria-label, 'Next')]"
+                    ]
+                    
+                    for selector in selectors:
+                        try:
+                            if selector.startswith("//"):
+                                elements = driver.find_elements(By.XPATH, selector)
+                            else:
+                                elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                            
+                            if elements and len(elements) > 0:
+                                next_button = elements[0]
+                                break
+                        except:
+                            continue
+                    
+                    if next_button and next_button.is_displayed():
+                        # Cuộn đến nút để đảm bảo nó có thể được nhìn thấy
+                        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", next_button)
+                        time.sleep(0.2)  # Thời gian chờ ngắn
+                        
+                        try:
+                            next_button.click()
+                        except:
+                            # Nếu không được, thử click bằng JavaScript
+                            driver.execute_script("arguments[0].click();", next_button)
+                        
+                        current_page += 1
+                        
+                        # Đợi trang mới tải - Thời gian chờ ngắn
+                        time.sleep(0.5)
+                        
+                        # Kiểm tra captcha sau khi chuyển trang
+                        if not check_and_handle_captcha(driver):
+                            print("Gặp CAPTCHA khi chuyển trang. Đang thử lại...")
+                            continue
+                    else:
+                        print(f"    ! Không tìm thấy nút Next Page khi chuyển đến trang {start_page}")
+                        has_next_page = False
+                        break
+                        
+                except Exception as e:
+                    print(f"    ! Lỗi khi chuyển đến trang {start_page}: {e}")
+                    has_next_page = False
+                    break
+                    
+            print(f"  * Đã đến trang {current_page}, bắt đầu cào dữ liệu...")
+        else:
+            print(f"  * Sẽ cào từ trang 1 đến trang {pages_to_crawl}")
+        
+        # Cào nhiều trang bình luận, bắt đầu từ trang hiện tại
         while has_next_page and current_page <= pages_to_crawl:
             print(f"  * Đang cào trang {current_page}/{pages_to_crawl}")
             
@@ -459,13 +534,12 @@ def read_product_links(json_file="product_links.json"):
         print(f"File {json_file} không đúng định dạng JSON. Sử dụng URL mặc định.")
         return ["https://www.lazada.vn/products/pdp-i1576166750-s14059010693.html"]
 
-def crawl_multiple_products(json_file="product_links.json", max_pages_per_product=10, headless=False):
+def crawl_multiple_products(json_file="product_links.json", max_pages_per_product=10, start_page=1, headless=False):
     """Cào bình luận từ nhiều sản phẩm trong file JSON"""
     # Đọc danh sách URL từ file JSON
     product_links = read_product_links(json_file)
     
     print(f"\n{'-'*80}")
-    
     print(f"Tìm thấy {len(product_links)} sản phẩm trong file {json_file}")
     print(f"{'-'*80}")
     
@@ -473,9 +547,9 @@ def crawl_multiple_products(json_file="product_links.json", max_pages_per_produc
     for i, url in enumerate(product_links):
         print(f"\n{'-'*80}")
         print(f"Đang cào sản phẩm {i+1}/{len(product_links)}")
-        # Cào dữ liệu từ URL hiện tại
-        reviews = crawl_lazada_reviews(url, max_pages=max_pages_per_product, headless=headless, 
-                                     product_index=i+1, total_products=len(product_links))
+        # Cào dữ liệu từ URL hiện tại, bắt đầu từ trang start_page
+        reviews = crawl_lazada_reviews(url, max_pages=max_pages_per_product, start_page=start_page,
+                                     headless=headless, product_index=i+1, total_products=len(product_links))
         total_reviews += len(reviews)
         
         # Nghỉ giữa các sản phẩm để tránh bị chặn (trừ sản phẩm cuối cùng)
@@ -490,5 +564,5 @@ def crawl_multiple_products(json_file="product_links.json", max_pages_per_produc
     print(f"{'-'*80}")
 
 if __name__ == "__main__":
-    # Cào tất cả sản phẩm từ file product_links.json
-    crawl_multiple_products(json_file="product_links.json", max_pages_per_product=10, headless=False)
+    # Cào tất cả sản phẩm từ file product_links.json, bắt đầu từ trang 839
+    crawl_multiple_products(json_file="product_links.json", max_pages_per_product=10, start_page=839, headless=False)
