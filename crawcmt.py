@@ -10,9 +10,9 @@ import time
 import csv
 import os
 import random
+import json
 
-
-def setup_driver(headless=False):  # Mặc định không dùng headless để dễ giải quyết captcha
+def setup_driver(headless=False):
     """Thiết lập và trả về driver Selenium với các tùy chọn để giảm khả năng bị phát hiện"""
     chrome_options = Options()
     
@@ -35,30 +35,28 @@ def setup_driver(headless=False):  # Mặc định không dùng headless để d
     chrome_options.add_argument('--disable-dev-shm-usage')
     chrome_options.add_argument('--no-sandbox')
     
-    # Thêm các tùy chọn để giảm khả năng hiển thị captcha
-    chrome_options.add_argument('--disable-extensions')
-    chrome_options.add_argument('--disable-popup-blocking')
+    # Thêm các tùy chọn để tải trang nhanh hơn
+    chrome_options.add_argument('--disable-gpu')
+    chrome_options.add_argument('--disable-animations')
+    
+    # Tải nhanh hơn bằng cách không tải hình ảnh
+    prefs = {
+        "profile.default_content_setting_values.notifications": 2,
+        "credentials_enable_service": False,
+        "profile.password_manager_enabled": False,
+    }
+    chrome_options.add_experimental_option("prefs", prefs)
     
     # Thêm tùy chọn headless nếu được yêu cầu
     if headless:
         chrome_options.add_argument('--headless=new')
         chrome_options.add_argument('--window-size=1920,1080')
     
-    # Thiết lập các tùy chọn để giả lập profile người dùng thực
-    prefs = {
-        "profile.default_content_setting_values.notifications": 2,
-        "credentials_enable_service": False,
-        "profile.password_manager_enabled": False
-    }
-    chrome_options.add_experimental_option("prefs", prefs)
-    
     # Khởi tạo driver với các tùy chọn đã thiết lập
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
     
     # Ghi đè các thuộc tính JavaScript để tránh phát hiện Selenium
     driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-    driver.execute_script("Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]})")
-    driver.execute_script("Object.defineProperty(navigator, 'languages', {get: () => ['vi-VN', 'vi', 'en-US', 'en']})")
     
     # Thiết lập kích thước cửa sổ ngẫu nhiên để giống người dùng thực
     if not headless:
@@ -86,7 +84,7 @@ def check_and_handle_captcha(driver):
             print("Sau khi giải xong, chương trình sẽ tự động tiếp tục sau 30 giây.")
             
             # Chờ người dùng giải captcha
-            time.sleep(30)
+            time.sleep(300000000000)  # Sửa từ 3000000000000 xuống 30 giây
             
             # Kiểm tra xem đã giải captcha thành công chưa
             if any(driver.find_elements(By.XPATH, indicator) for indicator in captcha_indicators):
@@ -97,6 +95,138 @@ def check_and_handle_captcha(driver):
                 return True
     
     return True  # Không có captcha
+
+    """Tìm tổng số trang của sản phẩm dựa vào cấu trúc phân trang"""
+    try:
+        # Tìm thẻ li chứa nút Next Page
+        next_page_li = driver.find_element(By.CSS_SELECTOR, "li.iweb-pagination-next")
+        
+        # Tìm thẻ li trước thẻ next_page_li (đây là thẻ li của trang cuối cùng)
+        # Sử dụng XPath để tìm phần tử liền trước
+        last_page_li = driver.find_element(By.XPATH, "//li[@class='iweb-pagination-next']/preceding-sibling::li[1]")
+        
+        # Lấy text từ thẻ li này (hoặc từ thẻ a con)
+        if last_page_li.find_elements(By.TAG_NAME, "a"):
+            last_page_text = last_page_li.find_element(By.TAG_NAME, "a").text
+        else:
+            last_page_text = last_page_li.text
+            
+        # Chuyển text thành số
+        return int(last_page_text)
+    except Exception as e:
+        print(f"    ! Không thể xác định số trang: {e}")
+        return 1  # Mặc định là 1 trang nếu không tìm thấy
+
+def find_total_pages(driver):
+    """Tìm tổng số trang dựa trên thẻ li.iweb-pagination-total-text"""
+    try:
+        # Đợi cho thẻ li có class=iweb-pagination-total-text xuất hiện
+        wait = WebDriverWait(driver, 10)
+        pagination_info = wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "li.iweb-pagination-total-text"))
+        )
+        
+        # Lấy text từ thẻ li này (vd: "1-5 / 23")
+        page_info_text = pagination_info.text.strip()
+        print(f"Thông tin phân trang: '{page_info_text}'")
+        
+        # Tách chuỗi để lấy số cuối cùng (số trang)
+        # Kiểu thông tin có thể là "1-5 / 23" hoặc tương tự
+        parts = page_info_text.split()
+        last_part = parts[-1]  # Lấy phần tử cuối cùng
+        
+        # Nếu phần cuối có dấu "/", tách lấy phần sau dấu "/"
+        if '/' in last_part:
+            total_pages = last_part.split('/')[-1].strip()
+        else:
+            total_pages = last_part
+            
+        # Chuyển đổi chuỗi thành số
+        if total_pages.isdigit():
+            return int(total_pages)
+        else:
+            print(f"    ! Không thể chuyển '{total_pages}' thành số")
+            return 1
+            
+    except NoSuchElementException:
+        print("    ! Không tìm thấy thẻ li.iweb-pagination-total-text")
+        return 1
+    except TimeoutException:
+        print("    ! Hết thời gian chờ khi tìm thẻ li.iweb-pagination-total-text")
+        return 1
+    except Exception as e:
+        print(f"    ! Lỗi khi xác định số trang: {e}")
+        return 1
+    """Tìm tổng số trang của sản phẩm dựa vào cấu trúc phân trang"""
+    try:
+        # Tìm thẻ ul có class phân trang - sử dụng selector đơn giản hơn
+        pagination_ul = driver.find_element(By.CSS_SELECTOR, "ul.iweb-pagination")
+        
+        # Tìm tất cả các thẻ li trong ul
+        pagination_items = pagination_ul.find_elements(By.TAG_NAME, "li")
+        
+        # Nếu có ít nhất 3 thẻ li, lấy thẻ li thứ 3 từ cuối
+        if len(pagination_items) >= 3:
+            # Lấy phần tử thứ 3 từ cuối (index -3)
+            last_page_li = pagination_items[-3]
+            
+            # Lấy text từ thẻ li này
+            if last_page_li.find_elements(By.TAG_NAME, "a"):
+                # Nếu có thẻ a con, lấy text từ thẻ a
+                last_page_text = last_page_li.find_element(By.TAG_NAME, "a").text.strip()
+            else:
+                # Ngược lại lấy text trực tiếp
+                last_page_text = last_page_li.text.strip()
+            
+            # Chuyển text thành số và trả về
+            if last_page_text.isdigit():
+                return int(last_page_text)
+            else:
+                print(f"    ! Text không phải số: '{last_page_text}'")
+                return 1
+        else:
+            print("    ! Không đủ phần tử phân trang để xác định tổng số trang")
+            return 1
+            
+    except NoSuchElementException:
+        print("    ! Không tìm thấy phần tử phân trang")
+        return 1
+    except Exception as e:
+        print(f"    ! Lỗi khi xác định số trang: {e}")
+        return 1  # Mặc định là 1 trang nếu không tìm thấy
+    """Tìm tổng số trang của sản phẩm dựa vào cấu trúc phân trang"""
+    try:
+        # Tìm thẻ ul có class chứa phân trang
+        pagination_ul = driver.find_element(By.CSS_SELECTOR, "ul.iweb-pagination.iweb-pagination-mini.review-pagination")
+        
+        # Tìm tất cả các thẻ li trong ul
+        pagination_items = pagination_ul.find_elements(By.TAG_NAME, "li")
+        
+        # Nếu có ít nhất 3 thẻ li, lấy thẻ li thứ 3 từ cuối
+        if len(pagination_items) >= 3:
+            # Lấy phần tử thứ 3 từ cuối (index -3)
+            last_page_li = pagination_items[-3]
+            
+            # Lấy text từ thẻ li này
+            if last_page_li.find_elements(By.TAG_NAME, "a"):
+                # Nếu có thẻ a con, lấy text từ thẻ a
+                last_page_text = last_page_li.find_element(By.TAG_NAME, "a").text.strip()
+            else:
+                # Ngược lại lấy text trực tiếp
+                last_page_text = last_page_li.text.strip()
+            
+            # Chuyển text thành số và trả về
+            return int(last_page_text) if last_page_text.isdigit() else 1
+        else:
+            print("    ! Không đủ phần tử phân trang để xác định tổng số trang")
+            return 1
+            
+    except NoSuchElementException:
+        print("    ! Không tìm thấy phần tử phân trang")
+        return 1
+    except Exception as e:
+        print(f"    ! Lỗi khi xác định số trang: {e}")
+        return 1  # Mặc định là 1 trang nếu không tìm thấy
 
 def count_stars(item_middle):
     """Đếm số sao từ thẻ div.container-star.review-star"""
@@ -182,12 +312,6 @@ def save_reviews_to_files(reviews):
     save_to_csv(low_reviews, "low.csv")
     save_to_csv(medium_reviews, "medium.csv")
     save_to_csv(high_reviews, "high.csv")
-    
-    # In thống kê
-    print("\nThống kê bình luận:")
-    print(f"- Bình luận tiêu cực (1-2 sao): {len(low_reviews)}")
-    print(f"- Bình luận trung bình (3 sao): {len(medium_reviews)}")
-    print(f"- Bình luận tích cực (4-5 sao): {len(high_reviews)}")
 
 def save_to_csv(reviews, filename):
     """Lưu danh sách bình luận vào file CSV với mode append"""
@@ -206,28 +330,8 @@ def save_to_csv(reviews, filename):
         
         # Viết dữ liệu
         writer.writerows(reviews)
-    
-    print(f"Đã lưu {len(reviews)} bình luận vào file {filename}")
 
-def simulate_human_behavior(driver):
-    """Mô phỏng hành vi người dùng thực để tránh bị phát hiện là bot"""
-    # Di chuyển chuột ngẫu nhiên (không hoạt động trong headless)
-    try:
-        webdriver.ActionChains(driver).move_by_offset(
-            random.randint(-100, 100), 
-            random.randint(-100, 100)
-        ).perform()
-    except:
-        pass
-    
-    # Cuộn trang với tốc độ ngẫu nhiên
-    scroll_amount = random.randint(100, 300)
-    driver.execute_script(f"window.scrollBy(0, {scroll_amount})")
-    
-    # Thêm delay ngẫu nhiên
-    time.sleep(random.uniform(1.5, 2.5))
-
-def crawl_lazada_reviews(url="https://www.lazada.vn/products/pdp-i1576166750-s14059010693.html", max_pages=10, headless=False):
+def crawl_lazada_reviews(url, max_pages=10, headless=False, product_index=None, total_products=None):
     """
     Hàm cào bình luận từ nhiều trang của sản phẩm Lazada
     
@@ -235,56 +339,66 @@ def crawl_lazada_reviews(url="https://www.lazada.vn/products/pdp-i1576166750-s14
         url (str): URL sản phẩm cần cào dữ liệu
         max_pages (int): Số trang tối đa cần cào
         headless (bool): Có chạy ở chế độ headless hay không
+        product_index (int): Chỉ số của sản phẩm hiện tại
+        total_products (int): Tổng số sản phẩm cần cào
     """
     driver = setup_driver(headless=headless)
     all_reviews = []
     current_page = 1
     has_next_page = True
+    total_pages = None  # Sẽ được cập nhật sau khi tìm thấy
     
     try:
-        print(f"Đang truy cập URL: {url}")
+        # In thông tin sản phẩm đang cào nếu có
+        if product_index is not None and total_products is not None:
+            print(f"Đang cào sản phẩm {product_index}/{total_products}: {url}")
+        else:
+            print(f"Đang cào sản phẩm: {url}")
+        
         driver.get(url)
         
-        # Đợi trang tải và kiểm tra captcha
-        time.sleep(random.uniform(3, 5))
+        # Đợi trang tải và kiểm tra captcha - Giảm xuống 2-4 giây để tăng tốc
+        time.sleep(random.uniform(2, 4))
         
         if not check_and_handle_captcha(driver):
-            print("Không thể xử lý captcha. Thoát chương trình.")
+            print("Không thể xử lý captcha. Bỏ qua sản phẩm này.")
             driver.quit()
             return []
+            
+        
+            
+        # Tìm tổng số trang
+        total_pages = find_total_pages(driver)
+        print(f"  * Sản phẩm có tổng cộng {total_pages} trang bình luận")
+        
+        # Giới hạn số trang cần cào theo người dùng chỉ định
+        pages_to_crawl =total_pages
+        print(f"  * Sẽ cào tối đa {pages_to_crawl} trang")
         
         # Cào nhiều trang bình luận
-        while has_next_page and current_page <= max_pages:
-            print(f"\n--- Đang cào dữ liệu từ trang {current_page}/{max_pages} ---")
+        while has_next_page:
+            print(f"  * Đang cào trang {current_page}/{pages_to_crawl}")
             
-            # Mô phỏng hành vi người dùng
-            simulate_human_behavior(driver)
-            
-            # Cuộn xuống để tìm phần bình luận
-            print("Cuộn trang để tìm phần bình luận...")
-            for i in range(3):  # Giảm số lần cuộn xuống 3
+            # Cuộn xuống để tìm phần bình luận - Giảm thời gian để tăng tốc
+            for i in range(3):
                 driver.execute_script(f"window.scrollBy(0, {random.randint(500, 700)})")
-                time.sleep(random.uniform(1.5, 2.5))
-            
-            # Tìm thẻ div có class="mod-reviews"
-            print("Đang tìm thẻ div có class='mod-reviews'...")
+                time.sleep(random.uniform(0.2, 0.5))  # Giảm thời gian chờ
             
             try:
-                # Đợi tối đa 10 giây cho div mod-reviews xuất hiện
-                reviews_div = WebDriverWait(driver, 10).until(
+                # Đợi tối đa 5 giây cho div mod-reviews xuất hiện
+                reviews_div = WebDriverWait(driver, 5).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "div.mod-reviews"))
                 )
-                print(f"Đã tìm thấy thẻ div.mod-reviews ở trang {current_page}!")
                 
-                # Kiểm tra captcha trước khi tiếp tục
+                # Kiểm tra captcha
                 if not check_and_handle_captcha(driver):
-                    print("Không thể xử lý captcha. Thử trang tiếp theo.")
+                    print("Gặp CAPTCHA. Bỏ qua trang này.")
                     current_page += 1
                     continue
                 
                 # Tìm tất cả các thẻ div có class="item" trong mod-reviews
                 items = reviews_div.find_elements(By.CSS_SELECTOR, "div.item")
-                print(f"Tìm thấy {len(items)} bình luận ở trang {current_page}")
+                print(f"    + Tìm thấy {len(items)} bình luận ở trang {current_page}")
                 
                 # Thu thập thông tin từ mỗi item (mỗi bình luận)
                 page_reviews = []
@@ -296,20 +410,16 @@ def crawl_lazada_reviews(url="https://www.lazada.vn/products/pdp-i1576166750-s14
                         item_middle = item.find_element(By.CSS_SELECTOR, "div.item-middle")
                         stars = count_stars(item_middle)
                         review_data["stars"] = stars
-                        print(f"Bình luận #{i+1} - Số sao: {stars}")
                     except NoSuchElementException:
                         review_data["stars"] = 0
-                        print(f"Bình luận #{i+1} - Không tìm thấy thẻ để đếm sao")
                     
                     # Tìm thẻ div có class="item-content" để lấy nội dung bình luận
                     try:
                         item_content = item.find_element(By.CSS_SELECTOR, "div.item-content")
                         content = get_review_content(item_content)
                         review_data["content"] = content
-                        print(f"Bình luận #{i+1} - Nội dung: {content[:50]}..." if len(content) > 50 else f"Bình luận #{i+1} - Nội dung: {content}")
                     except NoSuchElementException:
                         review_data["content"] = "Không có nội dung bình luận"
-                        print(f"Bình luận #{i+1} - Không tìm thấy nội dung bình luận")
                     
                     # Thêm vào danh sách reviews
                     page_reviews.append(review_data)
@@ -317,14 +427,11 @@ def crawl_lazada_reviews(url="https://www.lazada.vn/products/pdp-i1576166750-s14
                 # Thêm các bình luận của trang hiện tại vào danh sách tổng
                 all_reviews.extend(page_reviews)
                 
-                # Lưu bình luận của trang hiện tại vào các file CSV phân loại theo số sao
+                # Lưu bình luận của trang hiện tại vào các file CSV
                 save_reviews_to_files(page_reviews)
                 
                 # Tìm nút Next Page để chuyển trang
                 try:
-                    # Mô phỏng hành vi người dùng trước khi tìm nút Next
-                    simulate_human_behavior(driver)
-                    
                     # Thử nhiều selector để tìm nút Next Page
                     next_button = None
                     selectors = [
@@ -362,64 +469,107 @@ def crawl_lazada_reviews(url="https://www.lazada.vn/products/pdp-i1576166750-s14
                             pass
                         
                         if disabled or parent_disabled:
-                            print("Nút Next Page đã bị disabled. Đã đến trang cuối cùng.")
+                            print("    + Đã đến trang cuối cùng")
                             has_next_page = False
                         else:
                             # Cuộn đến nút để đảm bảo nó có thể được nhìn thấy
                             driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", next_button)
-                            time.sleep(random.uniform(1.5, 2.5))
+                            time.sleep(random.uniform(0.2, 0.5))  # Giảm thời gian chờ
                             
                             try:
-                                # Thêm delay ngẫu nhiên trước khi click
-                                time.sleep(random.uniform(1.5, 2.5))
-
-                                # Thử click thông thường
+                                time.sleep(random.uniform(0.2, 0.5))  # Giảm thời gian chờ
                                 next_button.click()
                             except:
                                 # Nếu không được, thử click bằng JavaScript
                                 driver.execute_script("arguments[0].click();", next_button)
                             
-                            print(f"Đã chuyển sang trang {current_page + 1}")
                             current_page += 1
                             
-                            # Đợi trang mới tải với thời gian ngẫu nhiên
-                            time.sleep(random.uniform(2, 3))
+                            # Đợi trang mới tải - Giảm thời gian chờ
+                            time.sleep(random.uniform(1, 2))
                             
                             # Kiểm tra captcha sau khi chuyển trang
                             check_and_handle_captcha(driver)
                     else:
-                        print("Không tìm thấy nút Next Page hoặc nút không hiển thị. Đã đến trang cuối cùng.")
+                        print("    + Không tìm thấy nút Next Page hoặc đã đến trang cuối")
                         has_next_page = False
                         
                 except Exception as e:
-                    print(f"Lỗi khi tìm nút Next Page: {e}")
+                    print(f"    ! Lỗi khi tìm nút Next Page: {e}")
                     has_next_page = False
                     
             except TimeoutException:
-                print(f"Không tìm thấy thẻ div có class='mod-reviews' ở trang {current_page}")
+                print("    ! Không tìm thấy thẻ div có class='mod-reviews'")
                 has_next_page = False
                 
             except Exception as e:
-                print(f"Lỗi khi xử lý trang {current_page}: {e}")
+                print(f"    ! Lỗi khi xử lý trang {current_page}: {e}")
                 has_next_page = False
                 
         # In thông tin tổng kết
-        print(f"\n--- Hoàn thành việc cào dữ liệu từ {current_page} trang ---")
-        print(f"Tổng số bình luận đã cào được: {len(all_reviews)}")
+        print(f"  => Hoàn thành cào {current_page-1}/{total_pages} trang, thu được {len(all_reviews)} bình luận")
         
     except Exception as e:
-        print(f"Lỗi: {e}")
+        print(f"  ! Lỗi: {e}")
         import traceback
         traceback.print_exc()
         
     finally:
         # Đóng driver
         driver.quit()
-        print("Đã đóng trình duyệt")
         
         return all_reviews
 
+def read_product_links(json_file="product_links.json"):
+    """Đọc danh sách URL sản phẩm từ file JSON"""
+    try:
+        with open(json_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # Kiểm tra cấu trúc của file JSON
+        if isinstance(data, list):
+            return data  # Trường hợp data là list các URL
+        elif isinstance(data, dict) and "links" in data:
+            return data["links"]  # Trường hợp data có key "links"
+        else:
+            print(f"Cấu trúc file {json_file} không hợp lệ. Sử dụng URL mặc định.")
+            return ["https://www.lazada.vn/products/pdp-i1576166750-s14059010693.html"]
+            
+    except FileNotFoundError:
+        print(f"Không tìm thấy file {json_file}. Sử dụng URL mặc định.")
+        return ["https://www.lazada.vn/products/pdp-i1576166750-s14059010693.html"]
+    except json.JSONDecodeError:
+        print(f"File {json_file} không đúng định dạng JSON. Sử dụng URL mặc định.")
+        return ["https://www.lazada.vn/products/pdp-i1576166750-s14059010693.html"]
+
+def crawl_multiple_products(json_file="product_links.json", max_pages_per_product=10, headless=False):
+    """Cào bình luận từ nhiều sản phẩm trong file JSON"""
+    # Đọc danh sách URL từ file JSON
+    product_links = read_product_links(json_file)
+    
+    print(f"\n{'-'*80}")
+    print(f"Tìm thấy {len(product_links)} sản phẩm trong file {json_file}")
+    print(f"{'-'*80}")
+    
+    total_reviews = 0
+    for i, url in enumerate(product_links):
+        print(f"\n{'-'*80}")
+        # Cào dữ liệu từ URL hiện tại
+        reviews = crawl_lazada_reviews(url, max_pages=max_pages_per_product, headless=headless, 
+                                     product_index=i+1, total_products=len(product_links))
+        total_reviews += len(reviews)
+        
+        # Nghỉ giữa các sản phẩm để tránh bị chặn (trừ sản phẩm cuối cùng)
+        if i < len(product_links) - 1:
+            pause_time = random.uniform(1, 2)  # Nghỉ 1-2 giây giữa các sản phẩm để tăng tốc
+            print(f"\nNghỉ {pause_time:.1f} giây trước khi cào sản phẩm tiếp theo...")
+            time.sleep(pause_time)
+    
+    print(f"\n{'-'*80}")
+    print(f"Hoàn thành việc cào {len(product_links)} sản phẩm")
+    print(f"Tổng số bình luận đã cào được: {total_reviews}")
+    print(f"{'-'*80}")
+
 if __name__ == "__main__":
-    # Cào bình luận từ URL sản phẩm (tối đa 10 trang)
-    url = "https://www.lazada.vn/products/pdp-i1576166750-s14059010693.html"
-    crawl_lazada_reviews(url, max_pages=1, headless=False)  # Không dùng headless để dễ xử lý captcha
+    # Cào tất cả sản phẩm từ file product_links.json
+    crawl_multiple_products(json_file="product_links.json", max_pages_per_product=10, headless=False)
