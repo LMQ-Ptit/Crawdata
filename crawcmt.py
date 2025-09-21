@@ -464,12 +464,14 @@ def crawl_multiple_products(json_file="product_links.json", max_pages_per_produc
     product_links = read_product_links(json_file)
     
     print(f"\n{'-'*80}")
+    
     print(f"Tìm thấy {len(product_links)} sản phẩm trong file {json_file}")
     print(f"{'-'*80}")
     
     total_reviews = 0
     for i, url in enumerate(product_links):
         print(f"\n{'-'*80}")
+        print(f"Đang cào sản phẩm {i+1}/{len(product_links)}")
         # Cào dữ liệu từ URL hiện tại
         reviews = crawl_lazada_reviews(url, max_pages=max_pages_per_product, headless=headless, 
                                      product_index=i+1, total_products=len(product_links))
@@ -477,7 +479,7 @@ def crawl_multiple_products(json_file="product_links.json", max_pages_per_produc
         
         # Nghỉ giữa các sản phẩm để tránh bị chặn (trừ sản phẩm cuối cùng)
         if i < len(product_links) - 1:
-            pause_time = random.uniform(1, 2)  # Nghỉ 1-2 giây giữa các sản phẩm để tăng tốc
+            pause_time = random.uniform(20,30)  # Nghỉ 1-2 giây giữa các sản phẩm để tăng tốc
             print(f"\nNghỉ {pause_time:.1f} giây trước khi cào sản phẩm tiếp theo...")
             time.sleep(pause_time)
     
