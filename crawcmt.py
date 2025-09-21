@@ -84,7 +84,7 @@ def check_and_handle_captcha(driver):
             print("Sau khi giải xong, chương trình sẽ tự động tiếp tục sau 30 giây.")
             
             # Chờ người dùng giải captcha
-            time.sleep(300000000000)  # Sửa từ 3000000000000 xuống 30 giây
+            time.sleep(30000000)  # Sửa thành 30 giây
             
             # Kiểm tra xem đã giải captcha thành công chưa
             if any(driver.find_elements(By.XPATH, indicator) for indicator in captcha_indicators):
@@ -95,27 +95,6 @@ def check_and_handle_captcha(driver):
                 return True
     
     return True  # Không có captcha
-
-    """Tìm tổng số trang của sản phẩm dựa vào cấu trúc phân trang"""
-    try:
-        # Tìm thẻ li chứa nút Next Page
-        next_page_li = driver.find_element(By.CSS_SELECTOR, "li.iweb-pagination-next")
-        
-        # Tìm thẻ li trước thẻ next_page_li (đây là thẻ li của trang cuối cùng)
-        # Sử dụng XPath để tìm phần tử liền trước
-        last_page_li = driver.find_element(By.XPATH, "//li[@class='iweb-pagination-next']/preceding-sibling::li[1]")
-        
-        # Lấy text từ thẻ li này (hoặc từ thẻ a con)
-        if last_page_li.find_elements(By.TAG_NAME, "a"):
-            last_page_text = last_page_li.find_element(By.TAG_NAME, "a").text
-        else:
-            last_page_text = last_page_li.text
-            
-        # Chuyển text thành số
-        return int(last_page_text)
-    except Exception as e:
-        print(f"    ! Không thể xác định số trang: {e}")
-        return 1  # Mặc định là 1 trang nếu không tìm thấy
 
 def find_total_pages(driver):
     """Tìm tổng số trang dựa trên thẻ li.iweb-pagination-total-text"""
@@ -157,76 +136,6 @@ def find_total_pages(driver):
     except Exception as e:
         print(f"    ! Lỗi khi xác định số trang: {e}")
         return 1
-    """Tìm tổng số trang của sản phẩm dựa vào cấu trúc phân trang"""
-    try:
-        # Tìm thẻ ul có class phân trang - sử dụng selector đơn giản hơn
-        pagination_ul = driver.find_element(By.CSS_SELECTOR, "ul.iweb-pagination")
-        
-        # Tìm tất cả các thẻ li trong ul
-        pagination_items = pagination_ul.find_elements(By.TAG_NAME, "li")
-        
-        # Nếu có ít nhất 3 thẻ li, lấy thẻ li thứ 3 từ cuối
-        if len(pagination_items) >= 3:
-            # Lấy phần tử thứ 3 từ cuối (index -3)
-            last_page_li = pagination_items[-3]
-            
-            # Lấy text từ thẻ li này
-            if last_page_li.find_elements(By.TAG_NAME, "a"):
-                # Nếu có thẻ a con, lấy text từ thẻ a
-                last_page_text = last_page_li.find_element(By.TAG_NAME, "a").text.strip()
-            else:
-                # Ngược lại lấy text trực tiếp
-                last_page_text = last_page_li.text.strip()
-            
-            # Chuyển text thành số và trả về
-            if last_page_text.isdigit():
-                return int(last_page_text)
-            else:
-                print(f"    ! Text không phải số: '{last_page_text}'")
-                return 1
-        else:
-            print("    ! Không đủ phần tử phân trang để xác định tổng số trang")
-            return 1
-            
-    except NoSuchElementException:
-        print("    ! Không tìm thấy phần tử phân trang")
-        return 1
-    except Exception as e:
-        print(f"    ! Lỗi khi xác định số trang: {e}")
-        return 1  # Mặc định là 1 trang nếu không tìm thấy
-    """Tìm tổng số trang của sản phẩm dựa vào cấu trúc phân trang"""
-    try:
-        # Tìm thẻ ul có class chứa phân trang
-        pagination_ul = driver.find_element(By.CSS_SELECTOR, "ul.iweb-pagination.iweb-pagination-mini.review-pagination")
-        
-        # Tìm tất cả các thẻ li trong ul
-        pagination_items = pagination_ul.find_elements(By.TAG_NAME, "li")
-        
-        # Nếu có ít nhất 3 thẻ li, lấy thẻ li thứ 3 từ cuối
-        if len(pagination_items) >= 3:
-            # Lấy phần tử thứ 3 từ cuối (index -3)
-            last_page_li = pagination_items[-3]
-            
-            # Lấy text từ thẻ li này
-            if last_page_li.find_elements(By.TAG_NAME, "a"):
-                # Nếu có thẻ a con, lấy text từ thẻ a
-                last_page_text = last_page_li.find_element(By.TAG_NAME, "a").text.strip()
-            else:
-                # Ngược lại lấy text trực tiếp
-                last_page_text = last_page_li.text.strip()
-            
-            # Chuyển text thành số và trả về
-            return int(last_page_text) if last_page_text.isdigit() else 1
-        else:
-            print("    ! Không đủ phần tử phân trang để xác định tổng số trang")
-            return 1
-            
-    except NoSuchElementException:
-        print("    ! Không tìm thấy phần tử phân trang")
-        return 1
-    except Exception as e:
-        print(f"    ! Lỗi khi xác định số trang: {e}")
-        return 1  # Mặc định là 1 trang nếu không tìm thấy
 
 def count_stars(item_middle):
     """Đếm số sao từ thẻ div.container-star.review-star"""
@@ -357,26 +266,33 @@ def crawl_lazada_reviews(url, max_pages=10, headless=False, product_index=None, 
         
         driver.get(url)
         
-        # Đợi trang tải và kiểm tra captcha - Giảm xuống 2-4 giây để tăng tốc
+        # Đợi trang tải và kiểm tra captcha
         time.sleep(random.uniform(2, 4))
         
         if not check_and_handle_captcha(driver):
             print("Không thể xử lý captcha. Bỏ qua sản phẩm này.")
             driver.quit()
             return []
-            
         
-            
+        # Cuộn xuống để tìm phần bình luận và phân trang
+        print("Cuộn trang để tìm phần phân trang...")
+        for i in range(10):  # Cuộn nhiều lần hơn để đảm bảo phân trang hiển thị
+            driver.execute_script(f"window.scrollBy(0, 300)")
+            time.sleep(0.5)  # Đợi giữa mỗi lần cuộn
+        
+        # Đợi thêm để trang tải hoàn tất
+        time.sleep(2)
+        
         # Tìm tổng số trang
         total_pages = find_total_pages(driver)
         print(f"  * Sản phẩm có tổng cộng {total_pages} trang bình luận")
         
         # Giới hạn số trang cần cào theo người dùng chỉ định
-        pages_to_crawl =total_pages
+        pages_to_crawl = total_pages
         print(f"  * Sẽ cào tối đa {pages_to_crawl} trang")
         
         # Cào nhiều trang bình luận
-        while has_next_page:
+        while has_next_page and current_page <= pages_to_crawl:
             print(f"  * Đang cào trang {current_page}/{pages_to_crawl}")
             
             # Cuộn xuống để tìm phần bình luận - Giảm thời gian để tăng tốc
