@@ -565,4 +565,5 @@ def crawl_multiple_products(json_file="product_links.json", max_pages_per_produc
 
 if __name__ == "__main__":
     # Cào tất cả sản phẩm từ file product_links.json, bắt đầu từ trang 839
-    crawl_multiple_products(json_file="product_links.json", max_pages_per_product=10, start_page=839, headless=False)
+    crawl_multiple_products(json_file="product_links.json", max_pages_per_product=10, start_page=1, headless=False)
+    #   "https://www.lazada.vn/products/pdp-i972780706-s3051334755.html?pvid=dd59f4c1-0774-4d0b-b043-d11ca0daf949&search=jfy&scm=1007.17519.386432.0&priceCompare=skuId%3A3051334755%3Bsource%3Atpp-recommend-plugin-32104%3Bsn%3Add59f4c1-0774-4d0b-b043-d11ca0daf949%3BoriginPrice%3A30400%3BdisplayPrice%3A30400%3BsinglePromotionId%3A900000052016266%3BsingleToolCode%3ApromPrice%3BvoucherPricePlugin%3A0%3Btimestamp%3A1758206466975",
