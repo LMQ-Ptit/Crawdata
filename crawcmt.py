@@ -38,7 +38,8 @@ def setup_driver(headless=False):
     # Thêm các tùy chọn để tải trang nhanh hơn
     chrome_options.add_argument('--disable-gpu')
     chrome_options.add_argument('--disable-animations')
-    
+    chrome_options.add_argument('--disable-software-rasterizer')
+    chrome_options.add_argument('--ignore-gpu-blocklist')
     # Tải nhanh hơn bằng cách không tải hình ảnh
     prefs = {
         "profile.default_content_setting_values.notifications": 2,
@@ -81,10 +82,10 @@ def check_and_handle_captcha(driver):
         if elements:
             print("\n--- CAPTCHA DETECTED! ---")
             print("Vui lòng giải captcha trong cửa sổ trình duyệt.")
-            print("Sau khi giải xong, chương trình sẽ tự động tiếp tục sau 30 giây.")
+            print("Sau khi giải xong, chương trình sẽ tự động tiếp tục sau 3 giây.")
             
             # Chờ người dùng giải captcha
-            time.sleep(30000000)  # Sửa thành 30 giây
+            time.sleep(30)  # Sửa thành 30 giây
             
             # Kiểm tra xem đã giải captcha thành công chưa
             if any(driver.find_elements(By.XPATH, indicator) for indicator in captcha_indicators):
@@ -479,7 +480,7 @@ def crawl_multiple_products(json_file="product_links.json", max_pages_per_produc
         
         # Nghỉ giữa các sản phẩm để tránh bị chặn (trừ sản phẩm cuối cùng)
         if i < len(product_links) - 1:
-            pause_time = random.uniform(20,30)  # Nghỉ 1-2 giây giữa các sản phẩm để tăng tốc
+            pause_time = random.uniform(1,2)  # Nghỉ 1-2 giây giữa các sản phẩm để tăng tốc
             print(f"\nNghỉ {pause_time:.1f} giây trước khi cào sản phẩm tiếp theo...")
             time.sleep(pause_time)
     
