@@ -186,11 +186,10 @@ def get_review_content(item_content):
         return item_content.text.strip()
 
 def save_reviews_to_files(reviews):
-    """Lưu danh sách bình luận vào 3 file CSV dựa theo số sao"""
+    """Lưu bình luận vào file CSV dựa theo số sao: 1-3 sao -> low1.csv, 4 sao -> medium1.csv, bỏ qua 5 sao"""
     # Phân loại bình luận
-    low_reviews = []    # 1-2 sao
-    medium_reviews = [] # 3 sao
-    high_reviews = []   # 4-5 sao
+    low_reviews = []    # 1-3 sao
+    medium_reviews = [] # 4 sao
     
     # Đếm số dòng hiện có trong mỗi file để tiếp tục STT
     def get_current_count(filename):
@@ -200,29 +199,25 @@ def save_reviews_to_files(reviews):
         with open(filename, 'r', encoding='utf-8', newline='') as f:
             return sum(1 for _ in f) - 1  # Trừ header
     
-    low_start = get_current_count("low.csv") + 1
-    medium_start = get_current_count("medium.csv") + 1
-    high_start = get_current_count("high.csv") + 1
+    low_start = get_current_count("low1.csv") + 1
+    medium_start = get_current_count("medium1.csv") + 1
     
     # Phân loại bình luận dựa trên số sao
     for review in reviews:
         stars = review["stars"]
         content = review["content"]
         
-        if stars <= 2:  # 1-2 sao
+        if 1 <= stars <= 3:  # 1-3 sao -> low1.csv
             low_reviews.append([low_start, content, stars])
             low_start += 1
-        elif stars == 3:  # 3 sao
+        elif stars == 4:  # 4 sao -> medium1.csv
             medium_reviews.append([medium_start, content, stars])
             medium_start += 1
-        else:  # 4-5 sao
-            high_reviews.append([high_start, content, stars])
-            high_start += 1
+        # Bỏ qua các bình luận 5 sao
     
     # Lưu vào từng file tương ứng
-    save_to_csv(low_reviews, "low.csv")
-    save_to_csv(medium_reviews, "medium.csv")
-    save_to_csv(high_reviews, "high.csv")
+    save_to_csv(low_reviews, "low1.csv")
+    save_to_csv(medium_reviews, "medium1.csv")
 
 def save_to_csv(reviews, filename):
     """Lưu danh sách bình luận vào file CSV với mode append"""
@@ -567,3 +562,4 @@ if __name__ == "__main__":
     # Cào tất cả sản phẩm từ file product_links.json, bắt đầu từ trang 839
     crawl_multiple_products(json_file="product_links.json", max_pages_per_product=10, start_page=1, headless=False)
     #   "https://www.lazada.vn/products/pdp-i972780706-s3051334755.html?pvid=dd59f4c1-0774-4d0b-b043-d11ca0daf949&search=jfy&scm=1007.17519.386432.0&priceCompare=skuId%3A3051334755%3Bsource%3Atpp-recommend-plugin-32104%3Bsn%3Add59f4c1-0774-4d0b-b043-d11ca0daf949%3BoriginPrice%3A30400%3BdisplayPrice%3A30400%3BsinglePromotionId%3A900000052016266%3BsingleToolCode%3ApromPrice%3BvoucherPricePlugin%3A0%3Btimestamp%3A1758206466975",
+# 8 15 270/714
